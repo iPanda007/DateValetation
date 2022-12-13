@@ -1,0 +1,32 @@
+ <Controller 
+               control={control}
+               name="startDate"
+                render={({field})=>(
+                  <LocalizationProvider dateAdapter={AdapterMoment}>
+                  <DateTimePicker
+                    value={field.value || null}
+                    onChange={(newValue: any) => {
+                        field.onChange(newValue)
+                    }}
+                    components={{
+                      OpenPickerIcon: DateIcon,
+                    }}
+                    renderInput={({ inputRef, inputProps, InputProps }) => (
+                      <div className={`relative `}>
+                        <input
+                          ref={inputRef}
+                          {...inputProps}
+                          className={`bg-white border border-secondary b  text-sm rounded-lg block w-full pr-10 p-2.5  outline-none placeholder:text-black  ${
+                            errors?.startDate?.message
+                              ? "text-danger border-danger"
+                              : ""
+                          }`}
+                        />
+                        <div className="flex absolute inset-y-0 z-20 right-0 items-center pr-3 opacity-50">
+                          {InputProps?.endAdornment}
+                        </div>
+                      </div>
+                    )}
+                  />
+                </LocalizationProvider>
+                )}  

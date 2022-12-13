@@ -1,0 +1,343 @@
+import * as Yup from 'yup';
+import { useEffect, useState } from 'react';
+import { useAppSelector } from 'src/store/hooks';
+import { Helmet } from 'react-helmet-async';
+import {
+  Box,
+  Button,
+  Card,
+  Container,
+  Grid,
+  Stack,
+  TextField,
+  useTheme,
+  Typography,
+  MenuItem,
+} from '@mui/material';
+import { AUTH_SERVER_URL } from 'src/config';
+import { PATH_DASHBOARD } from '../../routes/paths';
+import CustomBreadcrumbs from '../../components/custom-breadcrumbs';
+// form
+import { Controller, useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
+import { useSettingsContext } from 'src/components/settings';
+import { RHFTextField, RHFnoSelect, RHFtypeselect } from 'src/components/hook-form';
+import FormProvider from 'src/components/hook-form/FormProvider';
+import { LoadingButton } from '@mui/lab';
+
+import RHFEselect2 from 'src/components/hook-form/RHFEselect2';
+import { DateTimePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
+import { useNavigate } from 'react-router';
+import axios from 'axios';
+import { Block } from 'src/components/Block';
+import { useSnackbar } from 'src/components/snackbar';
+import Employee from 'src/api/Employee';
+import { useLocales } from 'src/locales';
+
+const New = () => {
+  const { enqueueSnackbar } = useSnackbar();
+  const { translate } = useLocales();
+  const [roleData, setRoleData]: any = useState([]);
+  const [locationData, setLocationData]: any = useState([]);
+  const { themeStretch } = useSettingsContext();
+  const { token, companyId } = useAppSelector((state) => state.auth.value);
+  const theme = useTheme();
+  const NewUserSchema = Yup.object().shape({
+    firstName: Yup.string().required('firstName is required'),
+    lastName: Yup.string().required('LastName is required'),
+    email: Yup.string().required('email is required'),
+    phone: Yup.string().required('Phone  is required'),
+    no: Yup.string().required('no is required'),
+    location: Yup.string().required('location is required'),
+    type: Yup.string().required('type is required'),
+    number: Yup.string().required('Number is required').max(6, 'should be 6 Digits'),
+    role: Yup.string().required('role is required'),
+    joindedDate: Yup.date()
+      .max(new Date().getFullYear(), 'Year must be current year ')
+      .required('Joined Date is required'),
+    password: Yup.string()
+      .required('Password is mendatory')
+      .min(6, 'Password must be at 6 char long'),
+    confirmPwd: Yup.string()
+      .required('Password is mendatory')
+      .oneOf([Yup.ref('password')], 'Passwords does not match'),
+    address: Yup.string().required('Address is required'),
+  });
+  const methods = useForm({
+    resolver: yupResolver(NewUserSchema),
+  });
+  const {
+    reset,
+    register,
+    watch,
+    control,
+    handleSubmit,
+
+    formState: { isSubmitting, errors },
+  } = methods;
+
+  
+    const navigate = useNavigate();
+  useEffect(() => {
+    fetchRoleData();
+    fetchLocationData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // nrc no
+  let nrc_no = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+  let nrc_types = ['N', 'E', 'P', 'A', 'F', 'TH', 'G'];
+
+  const fetchLocationData = async () => {
+    const res = await Employee.fetchLocation(companyId, token);
+    setLocationData(res.data.body.nrc_prefixes);
+  };
+
+  const fetchRoleData = async () => {
+    axios({
+      url: `${AUTH_SERVER_URL}roles/get-role?company_id=${companyId}`,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json; charset=UTF-8',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+      .then((res) => setRoleData(res.data.body))
+      .catch((err) => console.log(err));
+    reset();
+  };
+  const onSubmit = async (data: any) => {
+    const setData = {
+      company_id: companyId,
+      first_name: data.firstName,
+      last_name: data.lastName,
+      email: data.email,
+      phone: data.phone,
+      nrc_no: data.no,
+      nrc_location: data.location,
+      nrc_type: data.type,
+      nrc_number: data.number,
+      joined_date: data.joindedDate,
+      password: data.password,
+      address: data.address,
+      role: data.role,
+    };
+    axios({
+      url: `${AUTH_SERVER_URL}employees/store-employee`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=UTF-8',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      data: setData,
+    })
+      .then((res) => {
+        if (res.status === 201) {
+          enqueueSnackbar('Employee Create Successfully.', { variant: 'success' });
+          navigate(PATH_DASHBOARD.employeeManagement.list);
+        } else {
+          enqueueSnackbar('Employee Cannot Create.', { variant: 'warning' });
+        }
+      })
+      .catch((err) => console.log('err', err));
+  };
+  const [num, setNo] = useState('');
+  const [location, setLocation] = useState('');
+  const [type, setType] = useState('');
+
+  return (
+    <>
+      <Helmet>
+        <title>New Employee</title>
+      </Helmet>
+      <Container maxWidth={themeStretch ? false : 'lg'}>
+        <CustomBreadcrumbs
+          heading={translate('pages.employeeManagement.create.addNewEmployee')}
+          links={[{ name: 'Employee Create', href: PATH_DASHBOARD.employeeManagement.create }]}
+        />
+        <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
+          <Grid item xs={12} md={8}>
+            <Card sx={{ p: 3 }}>
+              <Typography variant="h4" sx={{ mb: 2 }}>
+                {translate('pages.employeeManagement.create.createNewEmployee')}
+              </Typography>
+              <Box
+                rowGap={3}
+                columnGap={2}
+                display="grid"
+                gridTemplateColumns={{
+                  xs: 'repeat(1, 1fr)',
+                  sm: 'repeat(2, 1fr)',
+                }}
+              >
+                <RHFTextField
+                  name="firstName"
+                  label={translate('pages.employeeManagement.create.firstName')}
+                />
+                <RHFTextField
+                  name="lastName"
+                  label={translate('pages.employeeManagement.create.lastName')}
+                />
+                <RHFTextField
+                  name="email"
+                  type="email"
+                  label={translate('pages.employeeManagement.create.email')}
+                />
+                <RHFTextField
+                  name="phone"
+                  type="number"
+                  label={translate('pages.employeeManagement.create.phone')}
+                />
+                <Grid container spacing={2}>
+                  <Grid item md={4} xs={12}>
+                    <RHFnoSelect
+                      register={register('no')}
+                      value={num}
+                      label={translate('pages.employeeManagement.create.no')}
+                      errorMessage={!num && errors.no?.message}
+                      optionsService={nrc_no}
+                      onChange={(e: any) => setNo(e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item md={4} xs={12}>
+                    <RHFEselect2
+                      register={register('location')}
+                      value={location}
+                      label={translate('pages.employeeManagement.create.location')}
+                      errorMessage={!location && errors.location?.message}
+                      optionsService={locationData}
+                      onChange={(e: any) => setLocation(e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item md={3.9} xs={12}>
+                    <RHFtypeselect
+                      register={register('type')}
+                      value={type}
+                      label={translate('pages.employeeManagement.create.type')}
+                      errorMessage={!type && errors.type?.message}
+                      optionsService={nrc_types}
+                      onChange={(e: any) => setType(e.target.value)}
+                    />
+                  </Grid>
+                </Grid>
+                <RHFTextField
+                  name="number"
+                  type="number"
+                  label={translate('pages.employeeManagement.create.number')}
+                />
+                {/* <RHFTextField name="role" label="Role" /> */}
+                <Controller
+                  name="role"
+                  control={control}
+                  render={({ field, fieldState: { error } }) => (
+                    <Box>
+                      <Block>
+                        <TextField
+                          select
+                          fullWidth
+                          label={translate('pages.employeeManagement.create.role')}
+                          defaultValue=""
+                          value={field.value || null}
+                          onChange={(e) => {
+                            field.onChange(e);
+                          }}
+                          error={error?.message ? true : false}
+                          helperText={error?.message}
+                          autoComplete="off"
+                        >
+                          {roleData?.map((item: any, key: number) => (
+                            <MenuItem key={key} value={item?.name}>
+                              {item?.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Block>
+                    </Box>
+                  )}
+                />
+                <Controller
+                  name="joindedDate"
+                  control={control}
+                  render={({ field, fieldState: { error } }) => (
+                    <LocalizationProvider dateAdapter={AdapterMoment}>
+                      <DateTimePicker
+                        label={translate('pages.employeeManagement.create.joinedDate')}
+                        renderInput={(props) => (
+                          <TextField
+                            {...props}
+                            fullWidth
+                            error={error?.message ? true : false}
+                            helperText={error?.message?.toString()}
+                          />
+                        )}
+                        value={field.value || null}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          // if (currentyear !== pickedDate) {
+                          //   console.log('error pya ya ml');
+                          //   setError('joindedDate', {
+                          //     type: 'custom',
+                          //     message: 'mr nay tl ',
+                          //   });
+                          // } else {
+                          //   trigger('joindedDate');
+                          // }
+                        }}
+                      />
+                    </LocalizationProvider>
+                  )}
+                />
+                <RHFTextField name="password" label="Password" type="password" />
+                <RHFTextField name="confirmPwd" label="Comfirm Password" type="password" />
+              </Box>
+              <Box sx={{ mt: 2 }}>
+                <RHFTextField
+                  name="address"
+                  multiline
+                  rows={7.8}
+                  label={translate('pages.employeeManagement.create.address')}
+                />
+              </Box>
+              <Stack
+                direction={'row'}
+                spacing={1.5}
+                justifyContent="flex-end"
+                alignItems="flex-end"
+                sx={{ mt: 3 }}
+              >
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    navigate(PATH_DASHBOARD.employeeManagement.root);
+                  }}
+                  sx={{
+                    backgroundColor:
+                      theme.palette.mode === 'light'
+                        ? theme.palette.grey[500]
+                        : theme.palette.grey[600],
+                    ':hover': {
+                      backgroundColor:
+                        theme.palette.mode === 'light'
+                          ? theme.palette.grey[600]
+                          : theme.palette.grey[700],
+                      boxShadow: 'none',
+                    },
+                  }}
+                >
+                  {translate('pages.employeeManagement.create.cancel')}
+                </Button>
+                <LoadingButton type="submit" variant="contained" loading={isSubmitting}>
+                  {translate('pages.employeeManagement.create.createUser')}
+                </LoadingButton>
+              </Stack>
+            </Card>
+          </Grid>
+        </FormProvider>
+      </Container>
+    </>
+  );
+};
+export default New;
