@@ -1,0 +1,586 @@
+import * as yup from "yup";
+import { yupResolver } from "@hookform/resolvers/yup";
+import { useForm, Controller } from "react-hook-form";
+
+import { motion } from "framer-motion";
+// components
+import Breadcrumb from "../../../components/elements/Breadcrumb";
+import FilePicker from "../../../components/form/FilePicker";
+import ChooseProduct from "../../../components/campaignrelated/ChooseProduct";
+// assets
+import ChooseReward from "../../../components/campaignrelated/ChooseReward";
+import DateIcon from "../../../assets/icons/DateIcon";
+import { useAppDispatch, useAppSelector } from "../../../store/hook";
+import { RootState } from "src/store";
+import { useEffect, useState } from "react";
+import { getProduct } from "../../../store/reducers/product";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterMoment } from "@mui/x-date-pickers/AdapterMoment";
+import { CustomFile } from "../../../@types/CustomFile";
+import { getRewardList } from "../../../store/reducers/RewardList";
+import {
+  createCampaignWithProduct,
+  editCampaignWithProduct,
+  fetchCampaignDetail,
+} from "../../../apis/campaign";
+
+import { openAlert } from "../../../../src/store/reducers/fetures/model/Alert";
+import { useLocation, useNavigate } from "react-router-dom";
+import moment from "moment";
+import useLocals from "../../../locals/useLocals";
+import { RewardCard } from "src/components/elements";
+interface dateStateProps {
+  startDate: string;
+  endDate: string;
+  rewardEndDate: string;
+}
+
+const CampaignWithProduct = () => {
+  const dispatch = useAppDispatch();
+  const location = useLocation();
+  const [loading, setLoading] = useState<boolean>(false);
+  const [stateData, setStateData] = useState<any>();
+  const { token } = useAppSelector((state: RootState) => state.auth);
+  const { productList } = useAppSelector((state: RootState) => state.product);
+  const { translate } = useLocals();
+  const navigate = useNavigate();
+  const { rewardList } = useAppSelector((state: RootState) => state.reward);
+
+  const [selectedReward, setSelectedReward] = useState<any>([]);
+  const [selectedProduct, setSelectedProduct] = useState<any>([]);
+  const [thankYouLists, setThankYouList] = useState<string[]>([]);
+  interface ICampaignWithProductForm {
+    title: string;
+    image: CustomFile | string | null;
+    productList: string;
+    rewardList: string;
+    startDate: string;
+    endDate: string;
+    rewardEndDate: string;
+  }
+
+  const schema = yup.object().shape({
+    title: yup.string().required("Campaign Title is required"),
+    image: yup.mixed().required("Campaign image is required"),
+    productList: yup.array().min(1, "Choose a product"),
+    rewardList: yup
+      .array()
+      .min(1, "Choose reward at least one item")
+      .required("Choose a reward"),
+    startDate: yup
+      .date()
+      .min(
+        moment().subtract(1, "days"),
+        "Campaign start Date Must be current Date"
+      )
+      .required("Campaign start date is required"),
+    endDate: yup
+      .date()
+      .min(
+        yup.ref("startDate"),
+        "Campaign end date should be grater than Campaign start date"
+      )
+      .required("Campaign End date is required"),
+    rewardEndDate: yup
+      .date()
+      .min(
+        yup.ref("endDate"),
+        "Reward End Date should be greater than campaign End Date"
+      )
+      .required("Reward End Date is required"),
+  });
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    control,
+    setError,
+    formState: { errors },
+  } = useForm<ICampaignWithProductForm>({
+    resolver: yupResolver(schema),
+  });
+
+  const onKeyDown = (e: any) => {
+    e.preventDefault();
+  };
+
+  const StartDate = watch("startDate");
+  const EndDate = watch("endDate");
+  const rewardDate = watch("rewardEndDate");
+
+  const onSubmit = (data: ICampaignWithProductForm) => {
+    if (+new Date(StartDate).getHours() === +new Date(EndDate).getHours()) {
+      setError("endDate", {
+        type: "custom",
+        message: "Please don't equal the current campaign start date",
+      });
+      return;
+    }
+
+    if (
+      new Date(EndDate)?.toLocaleDateString() ===
+      new Date(rewardDate)?.toLocaleDateString()
+    ) {
+      setError("rewardEndDate", {
+        type: "custom",
+        message: "Please don't equal the current campaign end date",
+      });
+      return;
+    }
+
+    setLoading(true);
+    if (location?.state) {
+      editCampaignWithProduct({
+        token: token,
+        name: data.title,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        rewardEndDate: data.rewardEndDate,
+        image: data.image,
+        rewardData: selectedReward,
+        productData: selectedProduct,
+        id: location.state.data.id,
+      })
+        .then((res) => {
+          if (res.data.meta.success) {
+            dispatch(
+              openAlert({
+                label: res.data.meta.message,
+                type: "success",
+              })
+            );
+            navigate("/dashboard/campaign-related-facts/campaign-lists");
+          }
+          setLoading(false);
+        })
+        .catch((err) => {
+          dispatch(
+            openAlert({
+              label: err.response.data.meta.message,
+              type: "error",
+            })
+          );
+          setLoading(false);
+        });
+    } else {
+      createCampaignWithProduct({
+        token: token,
+        name: data.title,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        rewardEndDate: data.rewardEndDate,
+        image: data.image,
+        rewardData: selectedReward,
+        productData: selectedProduct,
+      })
+        .then((res) => {
+          if (res.data.meta.success) {
+            dispatch(
+              openAlert({
+                label: res.data.meta.message,
+                type: "success",
+              })
+            );
+            navigate("/dashboard/campaign-related-facts/campaign-lists");
+          }
+          setLoading(false);
+        })
+        .catch((err) => {
+          dispatch(
+            openAlert({
+              label: err.response.data.meta.message,
+              type: "error",
+            })
+          );
+          setLoading(false);
+        });
+    }
+  };
+
+  const handleProductSelect = (id: string) => {
+    if (selectedProduct.includes(id)) {
+      let existingReward = selectedProduct.filter((item: any) => item !== id);
+      setSelectedProduct(existingReward);
+    } else {
+      setSelectedProduct([...selectedProduct, id]);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedProduct.length > 0) {
+      setError("productList", {
+        type: "custom",
+        message: "",
+      });
+    }
+    if (selectedReward.length > 0) {
+      setError("rewardList", {
+        type: "custom",
+        message: "",
+      });
+    }
+  }, [selectedProduct, selectedReward]);
+
+  const handleRewardSelect = (id: string) => {
+    if (selectedReward.includes(id)) {
+      let existingReward = selectedReward.filter((item: any) => item !== id);
+      setSelectedReward(existingReward);
+    } else {
+      let isExist = false;
+      for (let i = 0; i < selectedReward.length; i++) {
+        if (
+          thankYouLists.includes(selectedReward[i]) &&
+          thankYouLists.includes(id)
+        ) {
+          isExist = true;
+        }
+      }
+      if (isExist) {
+        dispatch(
+          openAlert({
+            label: `Cannot select more than one "Thank You"`,
+            type: "error",
+          })
+        );
+        isExist = false;
+      } else {
+        setSelectedReward([...selectedReward, id]);
+      }
+    }
+  };
+
+  useEffect(() => {
+    dispatch(getProduct(token));
+    dispatch(getRewardList(token));
+  }, []);
+
+  // console.log(selectedReward);
+
+  useEffect(() => {
+    if (rewardList.length > 0) {
+      let temp: string[] = [];
+      rewardList.filter((item: any) => {
+        if (item.reward_type === "thank_you") {
+          temp.push(item.id);
+        }
+      });
+
+      setThankYouList(temp);
+    }
+  }, [rewardList, dispatch]);
+
+  useEffect(() => {
+    setValue("productList", selectedProduct);
+  }, [selectedProduct]);
+
+  useEffect(() => {
+    setValue("rewardList", selectedReward);
+  }, [selectedReward]);
+
+  useEffect(() => {
+    if (location?.state) {
+      fetchCampaignDetail(token, location.state.data.id)
+        .then((res) => {
+          if (res.data.meta.success) {
+            setStateData(res.data.body);
+          }
+        })
+        .catch((err) => console.log(err));
+    }
+  }, [location]);
+  const image = watch("image");
+  useEffect(() => {
+    if (stateData !== undefined) {
+      setValue("title", stateData.campaign_name);
+      setValue("image", stateData.image);
+
+      const productData = stateData.CampaignOnProduct.map(
+        (item: any) => item.product_id
+      );
+      setSelectedProduct(productData);
+
+      const rewardData = stateData.CampaignOnReward.map(
+        (item: any) => item.reward_id
+      );
+      let rewardEndDate = stateData.CampaignOnReward.map(
+        (item: any) => item.reward_end_date
+      );
+      rewardEndDate = [...new Set(rewardEndDate)];
+      setSelectedReward(rewardData);
+
+      setValue("startDate", stateData.from_date);
+      setValue("endDate", stateData.to_date);
+      setValue("rewardEndDate", rewardEndDate[0]);
+    }
+  }, [stateData]);
+  return (
+    <div className="container mx-auto px-4 xl:px-28 3xl:px-44 5xl:px-[400px]">
+      <Breadcrumb
+        className="mt-[16px]"
+        links={[
+          {
+            name: `${
+              translate("pages.createCampaign.campaignRelatedFacts") as any
+            }`,
+            link: "/",
+          },
+          {
+            name: `${translate("pages.createCampaign.createCampaign") as any}`,
+            link: "/dashboard/campaign-related-facts/create-campaign",
+          },
+          {
+            name: `${
+              translate("pages.createCampaign.campaignWithProduct") as any
+            }`,
+            link: "/",
+            isActive: true,
+          },
+        ]}
+      />
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="w-4/5 mx-auto mt-[26px]"
+      >
+        <motion.h2
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: "50%", y: 0 }}
+          className="font-bold text-center text-title  uppercase"
+        >
+          {location?.state
+            ? "Edit Your Campaign"
+            : (translate("pages.createCampaign.createYourCampaign") as any)}
+        </motion.h2>
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-[10px]"
+        >
+          <div className="mb-[10px]">
+            <label className="text-default opacity-50 block mb-[10px]">
+              {translate("pages.createCampaign.campaignTitle") as any}
+            </label>
+
+            <div className="relative">
+              <input
+                {...register("title")}
+                type="text"
+                className={`w-full text-default px-4 py-3 border font-[400] border-secondary rounded-md outline-none leading-relaxed ${
+                  errors?.title?.message && "text-danger border-danger"
+                }`}
+              />
+              <span className="text-default absolute right-4 top-1/2 -translate-y-1/2 opacity-50">
+                16/150
+              </span>
+            </div>
+            <span className="text-xs text-danger">{errors.title?.message}</span>
+          </div>
+          {/* <FilePicker /> */}
+          <div className="mb-[10px]">
+            <label className="text-default opacity-50 block mb-[10px]">
+              {translate("pages.createCampaign.campaignImage") as any}
+            </label>
+            <div
+              className={`w-full h-[146px] bg-white px-[15px] p-3 rounded-[10px] flex flex-row items-center border border-secondary ${
+                errors?.image?.message ? "text-danger border-danger" : ""
+              }`}
+            >
+              <div className="w-full h-[109px] cursor-pointer addBorder">
+                <FilePicker
+                  title={stateData?.campaign_name || ""}
+                  img={image}
+                  onChange={(file) => {
+                    setValue("image", file);
+                    if (watch("image")) {
+                      setError("image", {
+                        type: "custom",
+                        message: "",
+                      });
+                      return;
+                    } else {
+                      setError("image", {
+                        type: "custom",
+                        message: "Campaign Image is required",
+                      });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            {errors?.image?.message && (
+              <span className="text-xs text-danger">
+                {errors?.image?.message}
+              </span>
+            )}
+          </div>
+
+          <ChooseProduct
+            selected={selectedProduct}
+            onSelect={handleProductSelect}
+            data={productList}
+            error={errors?.productList?.message}
+          />
+          <ChooseReward
+            selected={selectedReward}
+            onSelect={handleRewardSelect}
+            data={rewardList}
+            error={errors.rewardList?.message}
+          />
+          <div className="mb-[33px]">
+            <div className="grid grid-cols-3 gap-x-[10px]">
+              <div>
+                <label className="text-default opacity-50 block mb-[10px]">
+                  {translate("pages.createCampaign.campaignStartDate") as any}
+                </label>
+                <Controller
+                  control={control}
+                  name="startDate"
+                  render={({ field }) => (
+                    <LocalizationProvider dateAdapter={AdapterMoment}>
+                      <DateTimePicker
+                        value={field.value || null}
+                        onChange={(newValue: any) => {
+                          field.onChange(newValue);
+                        }}
+                        components={{
+                          OpenPickerIcon: DateIcon,
+                        }}
+                        inputFormat="DD MMM,YYYY - hh:mmA"
+                        renderInput={({ inputRef, inputProps, InputProps }) => (
+                          <div className={`relative `}>
+                            <input
+                              onKeyDown={onKeyDown}
+                              ref={inputRef}
+                              {...inputProps}
+                              className={`bg-white border border-secondary b  text-sm rounded-lg block w-full pr-10 p-2.5  outline-none placeholder:text-black  ${
+                                errors?.startDate?.message
+                                  ? "text-danger border-danger"
+                                  : ""
+                              }`}
+                            />
+                            <div className="flex absolute inset-y-0 z-20 right-0 items-center pr-3 opacity-50">
+                              {InputProps?.endAdornment}
+                            </div>
+                          </div>
+                        )}
+                      />
+                    </LocalizationProvider>
+                  )}
+                />
+                <span className="text-xs text-danger">
+                  {errors?.startDate?.message}
+                </span>
+              </div>
+              <div>
+                <label className="text-default opacity-50 block mb-[10px]">
+                  {translate("pages.createCampaign.campaignEndDate") as any}
+                </label>
+                <Controller
+                  control={control}
+                  name="endDate"
+                  render={({ field }) => (
+                    <LocalizationProvider dateAdapter={AdapterMoment}>
+                      <DateTimePicker
+                        value={field.value || null}
+                        onChange={(newValue: any) => {
+                          field.onChange(newValue);
+                          console.log(EndDate);
+                        }}
+                        components={{
+                          OpenPickerIcon: DateIcon,
+                        }}
+                        inputFormat="DD MMM,YYYY - hh:mmA"
+                        renderInput={({ inputRef, inputProps, InputProps }) => (
+                          <div className={`relative `}>
+                            <input
+                              disabled={true}
+                              onKeyDown={onKeyDown}
+                              ref={inputRef}
+                              {...inputProps}
+                              className={`bg-white border border-secondary b  text-sm rounded-lg block w-full pr-10 p-2.5  outline-none placeholder:text-black  ${
+                                errors?.startDate?.message
+                                  ? "text-danger border-danger"
+                                  : ""
+                              }`}
+                            />
+                            <div className="flex absolute inset-y-0 z-20 right-0 items-center pr-3 opacity-50">
+                              {InputProps?.endAdornment}
+                            </div>
+                          </div>
+                        )}
+                      />
+                    </LocalizationProvider>
+                  )}
+                />
+                <span className="text-xs text-danger">
+                  {errors?.endDate?.message}
+                </span>
+              </div>
+              <div>
+                <label className="text-default opacity-50 block mb-[10px]">
+                  {translate("pages.createCampaign.rewardEndDate") as any}
+                </label>
+                <Controller
+                  control={control}
+                  name="rewardEndDate"
+                  render={({ field }) => (
+                    <LocalizationProvider dateAdapter={AdapterMoment}>
+                      <DateTimePicker
+                        value={field.value || null}
+                        onChange={(newValue: any) => {
+                          field.onChange(newValue);
+                        }}
+                        components={{
+                          OpenPickerIcon: DateIcon,
+                        }}
+                        inputFormat="DD MMM,YYYY - hh:mmA"
+                        renderInput={({ inputRef, inputProps, InputProps }) => (
+                          <div className={`relative `}>
+                            <input
+                              ref={inputRef}
+                              onKeyDown={onKeyDown}
+                              {...inputProps}
+                              className={`bg-white border border-secondary b  text-sm rounded-lg block w-full pr-10 p-2.5  outline-none placeholder:text-black  ${
+                                errors?.rewardEndDate?.message
+                                  ? "text-danger border-danger"
+                                  : ""
+                              }`}
+                            />
+                            <div className="flex absolute inset-y-0 z-20 right-0 items-center pr-3 opacity-50">
+                              {InputProps?.endAdornment}
+                            </div>
+                          </div>
+                        )}
+                      />
+                    </LocalizationProvider>
+                  )}
+                />
+                <span className="text-xs text-danger">
+                  {errors?.rewardEndDate?.message}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-row justify-center items-center gap-x-[13px] mb-[30px]">
+            <button
+              type="button"
+              className="uppercase text-[13px] w-[153px] h-[35px] text-normal bg-whitePalelg border-[1.5px] border-black rounded-[17.5px] font-semibold"
+            >
+              {translate("pages.createCampaign.saveDraft") as any}
+            </button>
+            <button
+              disabled={loading}
+              className={`uppercase disabled:opacity-30 text-[13px]  w-[153px] h-[35px] text-normal bg-whitePalelg border-[1.5px] border-black rounded-[17.5px] font-semibold`}
+            >
+              {translate("pages.createCampaign.confirm") as any}
+            </button>
+          </div>
+        </motion.div>
+      </form>
+    </div>
+  );
+};
+
+export default CampaignWithProduct;
